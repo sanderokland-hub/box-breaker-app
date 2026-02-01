@@ -1,0 +1,15 @@
+{
+  "name": "box-breaker-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2",
+    "googleapis": "^171.0.0",
+    "sqlite3": "^5.1.7"
+  }
+}

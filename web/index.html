@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Box Breaker Hub</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="logo-text">BOXBREAKERPRO</div>
+      <nav class="tabs">
+        <button class="tab-button active" data-page="dashboard" type="button">
+          Dashboard
+        </button>
+        <button class="tab-button" data-page="baseline" type="button">
+          Import Checklist
+        </button>
+        <button class="tab-button" data-page="spot-creation" type="button">
+          Spot Creation
+        </button>
+      <button class="tab-button" data-page="assignments" type="button">
+        Assignments
+      </button>
+      <button class="tab-button" data-page="settings" type="button">
+        Settings
+      </button>
+      </nav>
+    </header>
+
+    <main>
+      <div class="page" data-page="dashboard">
+        <section class="panel">
+          <div class="dashboard-header">
+            <div>
+              <h2>Dashboard</h2>
+              <div class="muted">Work queue and recent activity</div>
+            </div>
+            <div class="dashboard-actions" id="dashboard-actions">
+              <button class="secondary" data-page="baseline" type="button">
+                Import Checklist
+              </button>
+              <button class="secondary" data-page="spot-creation" type="button">
+                Create Spot List
+              </button>
+              <button class="secondary" data-page="assignments" type="button">
+                View Assignments
+              </button>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="card stat-card">
+              <div class="muted">Baselines</div>
+              <div id="stat-baselines" class="stat-value">0</div>
+            </div>
+            <div class="card stat-card">
+              <div class="muted">Spot lists</div>
+              <div id="stat-spotlists" class="stat-value">0</div>
+            </div>
+            <div class="card stat-card">
+              <div class="muted">Assigned spots</div>
+              <div id="stat-assigned" class="stat-value">0</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h3>Work Queue</h3>
+            <span class="muted">Spot lists with open spots</span>
+          </div>
+          <div id="dashboard-queue" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h3>Recent Activity</h3>
+            <span class="muted">Latest baselines and spot lists</span>
+          </div>
+          <div id="dashboard-recent" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h3>Recent Baselines</h3>
+            <span class="muted">Quick view and checklist counts</span>
+          </div>
+          <div id="dashboard-baselines" class="list"></div>
+        </section>
+      </div>
+
+      <div class="page" data-page="baseline">
+        <section class="panel">
+          <h2>Import Checklist</h2>
+          <form id="beckett-form">
+            <label>
+              Beckett URL (one per line)
+              <textarea name="beckettUrls" rows="3"></textarea>
+            </label>
+            <button type="submit">Import Base Checklist</button>
+            <div id="beckett-status" class="status muted"></div>
+          </form>
+          <div class="card">
+            <strong>Checklist info preview</strong>
+            <form id="beckett-preview-form" class="inline-form">
+              <input
+                name="beckettUrl"
+                type="url"
+                placeholder="Paste a Beckett checklist URL"
+              />
+              <button type="submit">Preview</button>
+            </form>
+            <div id="beckett-preview" class="preview"></div>
+          </div>
+          <label>
+            Search baselines
+            <input id="break-search" type="text" placeholder="Search by name" />
+          </label>
+          <label>
+            Select baseline to review
+            <select id="baseline-select"></select>
+          </label>
+          <div id="baseline-details" class="list"></div>
+          <div id="break-list" class="list"></div>
+        </section>
+      </div>
+
+      <div class="page" data-page="spot-creation">
+        <section class="panel">
+          <h2>Spot Creation</h2>
+          <form id="spotlist-form">
+            <label>
+              Search break baselines
+              <input id="break-select-search" type="text" placeholder="Type to filter" />
+            </label>
+            <label>
+              Break type
+              <select id="break-type" name="breakType">
+                <option value="random-cards">Random character break</option>
+                <option value="random-teams">Random team break</option>
+              </select>
+            </label>
+            <label>
+              Break event
+              <select name="breakEventId" id="break-select">
+                <option value="">No break event</option>
+              </select>
+            </label>
+            <label>
+              Spot list name
+              <input name="name" type="text" required />
+            </label>
+            <label>
+              Total spots
+              <input name="totalSpots" type="number" required />
+            </label>
+            <label class="inline-check">
+              <input id="auto-import" name="autoImport" type="checkbox" />
+              Auto-import WooCommerce orders for this break
+            </label>
+            <div id="break-type-note" class="muted"></div>
+            <button type="submit">Create Spot List</button>
+          </form>
+          <div id="spotlist-list" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>WooCommerce Import</h2>
+          <form id="woo-import-form">
+            <label>
+              Spot list
+              <select id="woo-spotlist-select" required></select>
+            </label>
+            <label>
+              Match text (break name or #)
+              <input
+                id="woo-match-text"
+                name="matchText"
+                type="text"
+                placeholder="e.g. Box Break #5"
+                required
+              />
+            </label>
+            <button type="submit">Import buyers</button>
+          </form>
+          <div id="woo-import-status" class="status muted"></div>
+        </section>
+      </div>
+
+      <div class="page" data-page="assignments">
+        <section class="panel">
+          <h2>Spot List Assignments</h2>
+          <div class="toolbar">
+            <label>
+              View list
+              <select id="assignments-select"></select>
+            </label>
+            <div class="toolbar-actions">
+              <button id="refresh-assignments" type="button">Refresh</button>
+              <button id="randomize-spots" type="button">Randomize Spots</button>
+              <button id="reshuffle-cards" type="button">Reshuffle Cards</button>
+              <button id="export-sheets" type="button" class="secondary">
+                Export to Sheets
+              </button>
+            </div>
+          </div>
+          <div id="assignments-status" class="status muted"></div>
+          <div id="assignment-list" class="list"></div>
+        </section>
+      </div>
+
+      <div class="page" data-page="settings">
+        <section class="panel">
+          <h2>Settings</h2>
+          <div class="settings-card">
+            <div>
+              <strong>Google Sheets</strong>
+              <div id="google-status" class="muted">
+                Checking connection...
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button id="google-connect" type="button" class="secondary">
+                Connect Google Sheets
+              </button>
+              <button id="google-refresh" type="button" class="secondary">
+                Refresh Status
+              </button>
+            </div>
+          </div>
+          <div class="muted">
+            Exports will create a new tab inside the “box breaks” spreadsheet.
+          </div>
+        </section>
+      </div>
+
+    </main>
+
+    <button class="fab" id="fab-create" type="button" title="Create spot list">
+      +
+    </button>
+
+    <script src="app.js?v=11"></script>
+  </body>
+</html>
