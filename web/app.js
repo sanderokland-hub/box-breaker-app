@@ -122,12 +122,19 @@ const renderBreaks = (breaks, query = "") => {
   filtered.forEach((item) => {
     const card = document.createElement("div");
     card.className = "card";
+    const cardCount = Array.isArray(item.checklist_items)
+      ? item.checklist_items.length
+      : 0;
     card.innerHTML = `
-      <strong>${item.name}</strong>
-      <div class="muted">${item.event_date || "No date set"}</div>
-      <button class="danger" data-break-delete="${item.id}" type="button">
-        Delete baseline
-      </button>
+      <div class="card-row">
+        <div>
+          <strong>${item.name}</strong>
+          <div class="muted">Checklist cards: ${cardCount}</div>
+        </div>
+        <button class="danger" data-break-delete="${item.id}" type="button">
+          Delete checklist
+        </button>
+      </div>
     `;
     breakList.appendChild(card);
   });
@@ -190,7 +197,6 @@ const renderBaselineDetails = (breaks, selectedId) => {
   const checklistItems = found.checklist_items || [];
   card.innerHTML = `
     <strong>${found.name}</strong>
-    <div class="muted">${found.event_date || "No date set"}</div>
     <div>Checklist items: ${checklistItems.length}</div>
   `;
   baselineDetails.appendChild(card);

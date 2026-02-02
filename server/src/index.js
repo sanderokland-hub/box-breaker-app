@@ -549,26 +549,45 @@ const extractBaseChecklist = (html) => {
   if (!blocks.length) return [];
 
   const headerHints = /base\b/i;
-  const prioritized = blocks.filter((block) => headerHints.test(block.header));
-  const candidates = prioritized.length ? prioritized : blocks;
-  const best = candidates.reduce((top, block) =>
-    block.items.length > top.items.length ? block : top
+  const minItems = 5;
+  const cleanedBlocks = blocks.map((block) => {
+    const cleaned = block.items
+      .map((item) =>
+        item
+          .replace(/\s*\([^)]*\)\s*/g, " ")
+          .replace(
+            /\s*[-–]\s*(Checklist|Future Stars|League Leaders|Team Card|Title Winners).*$/i,
+            ""
+          )
+          .replace(/\s+Team Card$/i, "")
+          .replace(/\s+/g, " ")
+          .trim()
+      )
+      .filter(
+        (item) =>
+          item &&
+          !/checklist/i.test(item) &&
+          !/^(cards?|card set|base set|base)$/i.test(item)
+      );
+    return {
+      header: block.header,
+      cleaned,
+      size: cleaned.length,
+    };
+  });
+
+  const prioritized = cleanedBlocks.filter(
+    (block) => headerHints.test(block.header) && block.size >= minItems
+  );
+  const candidates = prioritized.length
+    ? prioritized
+    : cleanedBlocks.filter((block) => block.size >= minItems);
+  const pool = candidates.length ? candidates : cleanedBlocks;
+  const best = pool.reduce((top, block) =>
+    block.size > top.size ? block : top
   );
 
-  return best.items
-    .map((item) =>
-      item
-        .replace(/\s*\([^)]*\)\s*/g, " ")
-        .replace(
-          /\s*[-–]\s*(Checklist|Future Stars|League Leaders|Team Card|Title Winners).*$/i,
-          ""
-        )
-        .replace(/\s+Team Card$/i, "")
-        .replace(/\s+/g, " ")
-        .trim()
-    )
-    .filter((item) => item && !/checklist/i.test(item))
-    .slice(0, 2000);
+  return best.cleaned.slice(0, 2000);
 };
 
 const parseChecklistUrl = (value) => {

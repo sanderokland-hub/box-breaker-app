@@ -171,6 +171,13 @@ button.danger:hover {
   box-shadow: 0 10px 24px rgba(2, 6, 23, 0.35);
 }
 
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
 .status {
   font-size: 14px;
   color: #22c55e;
