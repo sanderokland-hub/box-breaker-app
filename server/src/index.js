@@ -11,6 +11,19 @@ const PORT = process.env.PORT || 3000;
 
 const webRoot = path.join(__dirname, "..", "..", "web");
 app.use(express.static(webRoot));
+app.use(express.json({ limit: "1mb" }));
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on("finish", () => {
+    const durationMs = Date.now() - startedAt;
+    console.log(
+      `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${
+        res.statusCode
+      } ${durationMs}ms`
+    );
+  });
+  next();
+});
 
 const run = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -121,17 +134,31 @@ const sanitizeSheetTitle = (value) =>
     .trim()
     .slice(0, 90) || "Break Export";
 
-const verifyWooSignature = (rawBody, signature) => {
-  if (!hasWooWebhookSecret) return false;
-  if (!signature || !rawBody) return false;
-  const expected = crypto
+const computeWooSignature = (rawBody) => {
+  const base64 = crypto
     .createHmac("sha256", WOOCOMMERCE_WEBHOOK_SECRET)
     .update(rawBody)
     .digest("base64");
-  const sigBuffer = Buffer.from(signature, "utf-8");
-  const expectedBuffer = Buffer.from(expected, "utf-8");
-  if (sigBuffer.length !== expectedBuffer.length) return false;
-  return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
+  const hex = crypto
+    .createHmac("sha256", WOOCOMMERCE_WEBHOOK_SECRET)
+    .update(rawBody)
+    .digest("hex");
+  return { base64, hex };
+};
+
+const verifyWooSignature = (rawBody, signature) => {
+  if (!hasWooWebhookSecret) return false;
+  if (!signature || !rawBody) return false;
+  const { base64, hex } = computeWooSignature(rawBody);
+  const signatureTrimmed = String(signature)
+    .trim()
+    .replace(/^"|"$/g, "");
+
+  if (signatureTrimmed === base64) {
+    return true;
+  }
+  if (signatureTrimmed.toLowerCase() === hex.toLowerCase()) return true;
+  return false;
 };
 
 const buildWooAuthHeader = () => {
@@ -480,19 +507,36 @@ const parseBeckettUrl = (value) => {
 
 const fetchBeckettHtml = async (url) => {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-      },
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+  const fetchText = async (targetUrl) => {
+    const response = await fetch(targetUrl, {
+      headers,
       signal: controller.signal,
     });
     if (!response.ok) {
       throw new Error(`Request failed with status ${response.status}`);
     }
     return await response.text();
+  };
+  try {
+    return await fetchText(url);
+  } catch (err) {
+    const fallbackUrl = `https://r.jina.ai/http://${String(url).replace(
+      /^https?:\/\//,
+      ""
+    )}`;
+    try {
+      return await fetchText(fallbackUrl);
+    } catch (fallbackErr) {
+      throw err;
+    }
   } finally {
     clearTimeout(timeout);
   }
@@ -1229,6 +1273,14 @@ app.post(
       return res.status(500).json({ error: "Webhook secret not configured." });
     }
     if (!verifyWooSignature(req.body, signature)) {
+      const { base64, hex } = hasWooWebhookSecret
+        ? computeWooSignature(req.body)
+        : { base64: "", hex: "" };
+      console.error("[woo-webhook] Signature mismatch", {
+        received: String(signature || "").slice(0, 16),
+        expectedBase64: base64.slice(0, 16),
+        expectedHex: hex.slice(0, 16),
+      });
       return res.status(401).json({ error: "Invalid webhook signature." });
     }
     let payload;
@@ -1304,8 +1356,6 @@ app.post(
     }
   }
 );
-
-app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/google/callback", async (req, res) => {
   const code = req.query.code;
