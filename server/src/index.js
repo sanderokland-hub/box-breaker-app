@@ -506,6 +506,24 @@ const extractBaseChecklist = (html) => {
   if (startIndex === -1) {
     startIndex = lines.findIndex((line) => /^Base$/i.test(line));
   }
+  if (startIndex === -1) {
+    startIndex = lines.findIndex((line) => /^Base Set\b/i.test(line));
+  }
+  if (startIndex === -1) {
+    startIndex = lines.findIndex((line) => /^Base Checklist\b/i.test(line));
+  }
+
+  const parseNumberedLine = (line) => {
+    const match = line.match(
+      /^(?:#|No\.?\s*)?(\d{1,4}[A-Za-z]?)\b[.\-:)]?\s+(.+)$/
+    );
+    if (!match) return null;
+    return match[2];
+  };
+
+  if (startIndex === -1) {
+    startIndex = lines.findIndex((line) => Boolean(parseNumberedLine(line)));
+  }
   if (startIndex === -1) return [];
 
   const cards = [];
@@ -522,22 +540,21 @@ const extractBaseChecklist = (html) => {
       break;
     }
     if (/^Parallels?:/i.test(line)) continue;
-    if (/^\d+\s+/.test(line)) {
-      const cleaned = line
-        .replace(/^\d+\s+/, "")
-        .replace(/\s*\([^)]*\)\s*/g, " ")
-        .replace(
-          /\s*[-–]\s*(Checklist|Future Stars|League Leaders|Team Card|Title Winners).*$/i,
-          ""
-        )
-        .replace(/\s+Team Card$/i, "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (cleaned && !/checklist/i.test(cleaned)) {
-        cards.push(cleaned);
-      }
-      if (cards.length >= 2000) break;
+    const numbered = parseNumberedLine(line);
+    if (!numbered) continue;
+    const cleaned = numbered
+      .replace(/\s*\([^)]*\)\s*/g, " ")
+      .replace(
+        /\s*[-–]\s*(Checklist|Future Stars|League Leaders|Team Card|Title Winners).*$/i,
+        ""
+      )
+      .replace(/\s+Team Card$/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (cleaned && !/checklist/i.test(cleaned)) {
+      cards.push(cleaned);
     }
+    if (cards.length >= 2000) break;
   }
   return cards;
 };

@@ -771,7 +771,11 @@ beckettForm.addEventListener("submit", async (event) => {
       createdCount === 1 ? "" : "s"
     }.`;
     if (failedCount) {
-      message += ` ${failedCount} failed.`;
+      const firstFailure = result.failed[0];
+      const failureDetail = firstFailure
+        ? ` ${firstFailure.error || "Import failed."}`
+        : "";
+      message += ` ${failedCount} failed.${failureDetail}`;
     }
     beckettStatus.textContent = message;
     beckettForm.reset();
