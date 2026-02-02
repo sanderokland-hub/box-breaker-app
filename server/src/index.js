@@ -1272,12 +1272,22 @@ app.get("/api/activity", async (_req, res) => {
 });
 
 app.post("/api/woo/webhook", async (req, res) => {
-  const signature = req.get("x-wc-webhook-signature");
+  const signature =
+    req.get("x-wc-webhook-signature") ||
+    req.get("x_wc_webhook_signature") ||
+    req.headers["x-wc-webhook-signature"] ||
+    req.headers["x_wc_webhook_signature"];
   const rawBody =
     req.rawBody ||
     Buffer.from(JSON.stringify(req.body || {}), "utf-8");
   if (!hasWooWebhookSecret) {
     return res.status(500).json({ error: "Webhook secret not configured." });
+  }
+  if (!signature) {
+    console.error("[woo-webhook] Missing signature header", {
+      headerKeys: Object.keys(req.headers || {}),
+      contentType: req.get("content-type") || "",
+    });
   }
   if (!verifyWooSignature(rawBody, signature)) {
     const { base64, hex } = hasWooWebhookSecret
