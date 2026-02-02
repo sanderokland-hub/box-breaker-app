@@ -500,19 +500,6 @@ const extractBaseChecklist = (html) => {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  let startIndex = lines.findIndex((line) =>
-    /Base Set Checklist/i.test(line)
-  );
-  if (startIndex === -1) {
-    startIndex = lines.findIndex((line) => /^Base$/i.test(line));
-  }
-  if (startIndex === -1) {
-    startIndex = lines.findIndex((line) => /^Base Set\b/i.test(line));
-  }
-  if (startIndex === -1) {
-    startIndex = lines.findIndex((line) => /^Base Checklist\b/i.test(line));
-  }
-
   const parseNumberedLine = (line) => {
     const match = line.match(
       /^(?:#|No\.?\s*)?(\d{1,4}[A-Za-z]?)\b[.\-:)]?\s+(.+)$/
@@ -521,49 +508,73 @@ const extractBaseChecklist = (html) => {
     return match[2];
   };
 
-  if (startIndex === -1) {
-    startIndex = lines.findIndex((line) => Boolean(parseNumberedLine(line)));
-  }
-  if (startIndex === -1) return [];
+  const blocks = [];
+  let current = null;
+  let lastHeader = "";
 
-  const cards = [];
-  for (let i = startIndex + 1; i < lines.length; i += 1) {
-    const line = lines[i];
+  lines.forEach((line) => {
     if (
       /^(Variations|Autographs|Memorabilia|Inserts|Full Checklist|Team Sets|Checklist Top)$/i.test(
         line
       )
     ) {
-      break;
+      if (current && current.items.length) blocks.push(current);
+      current = null;
+      lastHeader = "";
+      return;
     }
-    if (/^Base\s*[–-]\s*(Short|Super|SSP|Base)/i.test(line)) {
-      break;
-    }
-    if (/^Parallels?:/i.test(line)) continue;
+
+    if (/^Parallels?:/i.test(line)) return;
+
     const numbered = parseNumberedLine(line);
-    if (!numbered) continue;
-    const cleaned = numbered
-      .replace(/\s*\([^)]*\)\s*/g, " ")
-      .replace(
-        /\s*[-–]\s*(Checklist|Future Stars|League Leaders|Team Card|Title Winners).*$/i,
-        ""
-      )
-      .replace(/\s+Team Card$/i, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (cleaned && !/checklist/i.test(cleaned)) {
-      cards.push(cleaned);
+    if (!numbered) {
+      if (current && current.items.length) {
+        blocks.push(current);
+        current = null;
+      }
+      if (line.length < 120) {
+        lastHeader = line;
+      }
+      return;
     }
-    if (cards.length >= 2000) break;
-  }
-  return cards;
+
+    if (!current) {
+      current = { header: lastHeader, items: [] };
+    }
+    current.items.push(numbered);
+  });
+
+  if (current && current.items.length) blocks.push(current);
+
+  if (!blocks.length) return [];
+
+  const headerHints = /base\b/i;
+  const prioritized = blocks.filter((block) => headerHints.test(block.header));
+  const candidates = prioritized.length ? prioritized : blocks;
+  const best = candidates.reduce((top, block) =>
+    block.items.length > top.items.length ? block : top
+  );
+
+  return best.items
+    .map((item) =>
+      item
+        .replace(/\s*\([^)]*\)\s*/g, " ")
+        .replace(
+          /\s*[-–]\s*(Checklist|Future Stars|League Leaders|Team Card|Title Winners).*$/i,
+          ""
+        )
+        .replace(/\s+Team Card$/i, "")
+        .replace(/\s+/g, " ")
+        .trim()
+    )
+    .filter((item) => item && !/checklist/i.test(item))
+    .slice(0, 2000);
 };
 
-const parseBeckettUrl = (value) => {
+const parseChecklistUrl = (value) => {
   try {
     const url = new URL(String(value || "").trim());
-    if (!/beckett\.com$/i.test(url.hostname)) return null;
-    if (!url.pathname.includes("/news/")) return null;
+    if (!/^https?:$/.test(url.protocol)) return null;
     return url.toString();
   } catch (err) {
     return null;
@@ -1082,12 +1093,12 @@ app.post("/api/beckett/import", async (req, res) => {
   const { urls } = req.body || {};
   const rawUrls = Array.isArray(urls) ? urls : [urls];
   const parsedUrls = rawUrls
-    .map(parseBeckettUrl)
+    .map(parseChecklistUrl)
     .filter((value) => value);
 
   if (!parsedUrls.length) {
     return res.status(400).json({
-      error: "Provide one or more Beckett checklist URLs.",
+      error: "Provide one or more checklist URLs.",
     });
   }
 
@@ -1134,9 +1145,9 @@ app.post("/api/beckett/import", async (req, res) => {
 
 app.post("/api/beckett/preview", async (req, res) => {
   const { url } = req.body || {};
-  const parsedUrl = parseBeckettUrl(url);
+  const parsedUrl = parseChecklistUrl(url);
   if (!parsedUrl) {
-    return res.status(400).json({ error: "Provide a valid Beckett URL." });
+    return res.status(400).json({ error: "Provide a valid checklist URL." });
   }
   try {
     const html = await fetchBeckettHtml(parsedUrl);
