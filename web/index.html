@@ -121,6 +121,28 @@
             <select id="baseline-select"></select>
           </label>
           <div id="baseline-details" class="list"></div>
+          <div class="card checklist-editor-card">
+            <div class="editor-header">
+              <strong>Checklist editor</strong>
+              <span class="muted">Drag to reorder, click × to delete.</span>
+            </div>
+            <div class="editor-toolbar">
+              <input
+                id="baseline-item-input"
+                type="text"
+                placeholder="Add a checklist card"
+              />
+              <button id="baseline-item-add" type="button">Add</button>
+            </div>
+            <ul id="baseline-checklist-editor" class="checklist-editor-list"></ul>
+            <div class="editor-actions">
+              <button id="baseline-save" type="button">Save checklist</button>
+              <button id="baseline-reset" type="button" class="secondary">
+                Reset
+              </button>
+            </div>
+            <div id="baseline-editor-status" class="status muted"></div>
+          </div>
           <div id="break-list" class="list"></div>
         </section>
       </div>
@@ -185,6 +207,24 @@
           </form>
           <div id="woo-import-status" class="status muted"></div>
         </section>
+
+        <section class="panel">
+          <h2>Spot Distribution Editor</h2>
+          <div class="toolbar">
+            <label>
+              Spot list
+              <select id="spot-editor-select"></select>
+            </label>
+            <div class="toolbar-actions">
+              <button id="spot-editor-save" type="button">Save Distribution</button>
+              <button id="spot-editor-reset" type="button" class="secondary">
+                Reset Distribution
+              </button>
+            </div>
+          </div>
+          <div id="spot-editor-status" class="status muted"></div>
+          <div id="spot-editor-list" class="list"></div>
+        </section>
       </div>
 
       <div class="page" data-page="assignments">
@@ -199,6 +239,10 @@
               <button id="refresh-assignments" type="button">Refresh</button>
               <button id="randomize-spots" type="button">Randomize Spots</button>
               <button id="reshuffle-cards" type="button">Reshuffle Cards</button>
+              <button id="save-distribution" type="button">Save Distribution</button>
+              <button id="reset-distribution" type="button" class="secondary">
+                Reset Distribution
+              </button>
               <button id="export-sheets" type="button" class="secondary">
                 Export to Sheets
               </button>

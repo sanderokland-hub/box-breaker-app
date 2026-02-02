@@ -75,6 +75,13 @@ const parseChecklist = (row) => ({
 const validateRequired = (value) =>
   typeof value === "string" && value.trim().length > 0;
 
+const normalizeChecklistItems = (items) =>
+  Array.isArray(items)
+    ? items
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    : [];
+
 const WOOCOMMERCE_URL = process.env.WOOCOMMERCE_URL || "";
 const WOOCOMMERCE_KEY = process.env.WOOCOMMERCE_KEY || "";
 const WOOCOMMERCE_SECRET = process.env.WOOCOMMERCE_SECRET || "";
@@ -410,6 +417,29 @@ const extractTeamsFromChecklist = (items) => {
     .sort((a, b) => a.localeCompare(b));
 };
 
+const parseCustomDistribution = (spotList) => {
+  if (!spotList || !spotList.custom_distribution_json) return null;
+  try {
+    const parsed = JSON.parse(spotList.custom_distribution_json);
+    if (!Array.isArray(parsed)) return null;
+    const distribution = new Map();
+    for (let i = 1; i <= spotList.total_spots; i += 1) {
+      const entry = parsed[i - 1];
+      if (!Array.isArray(entry)) {
+        distribution.set(i, []);
+        continue;
+      }
+      const cleaned = entry
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+      distribution.set(i, cleaned);
+    }
+    return distribution;
+  } catch (err) {
+    return null;
+  }
+};
+
 const decodeHtmlEntities = (input) =>
   input
     .replace(/&amp;/g, "&")
@@ -644,9 +674,7 @@ app.post("/api/breaks", async (req, res) => {
   if (!validateRequired(name)) {
     return res.status(400).json({ error: "Name is required." });
   }
-  const items = Array.isArray(checklistItems)
-    ? checklistItems.filter((item) => typeof item === "string" && item.trim())
-    : [];
+  const items = normalizeChecklistItems(checklistItems);
   try {
     const result = await run(
       "INSERT INTO break_events (name, event_date, checklist_json) VALUES (?, ?, ?);",
@@ -667,9 +695,7 @@ app.put("/api/breaks/:id", async (req, res) => {
   if (!validateRequired(name)) {
     return res.status(400).json({ error: "Name is required." });
   }
-  const items = Array.isArray(checklistItems)
-    ? checklistItems.filter((item) => typeof item === "string" && item.trim())
-    : [];
+  const items = normalizeChecklistItems(checklistItems);
   try {
     await run(
       "UPDATE break_events SET name = ?, event_date = ?, checklist_json = ? WHERE id = ?;",
@@ -680,6 +706,23 @@ app.put("/api/breaks/:id", async (req, res) => {
     res.json(parseChecklist(row));
   } catch (err) {
     res.status(500).json({ error: "Failed to update break." });
+  }
+});
+
+app.put("/api/breaks/:id/checklist", async (req, res) => {
+  const { id } = req.params;
+  const { checklistItems } = req.body || {};
+  const items = normalizeChecklistItems(checklistItems);
+  try {
+    await run("UPDATE break_events SET checklist_json = ? WHERE id = ?;", [
+      JSON.stringify(items),
+      id,
+    ]);
+    const row = await get("SELECT * FROM break_events WHERE id = ?;", [id]);
+    if (!row) return res.status(404).json({ error: "Break not found." });
+    res.json(parseChecklist(row));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update checklist." });
   }
 });
 
@@ -787,6 +830,7 @@ const buildSpotAssignments = async (spotList, checklistItems = []) => {
   const assignedIndices = assignments.map((assignment) => assignment.spot_index);
   const breakType = spotList.break_type || "random-cards";
   const seedKey = spotList.checklist_seed || spotList.id;
+  const customDistribution = parseCustomDistribution(spotList);
   const checklistDistribution =
     breakType === "random-cards"
       ? buildChecklistDistribution(checklistItems, assignedIndices, seedKey)
@@ -818,16 +862,21 @@ const buildSpotAssignments = async (spotList, checklistItems = []) => {
     const assigned = assignedByIndex.get(i);
     const team =
       breakType === "random-teams" ? teamList[i - 1] || null : null;
+    const overrideCards = customDistribution
+      ? customDistribution.get(i) || []
+      : null;
     spots.push({
       index: i,
       assigned: Boolean(assigned),
       team,
       cards:
-        breakType === "random-teams"
-          ? team
-            ? teamCards.get(team) || []
-            : []
-          : checklistDistribution.get(i) || [],
+        overrideCards !== null
+          ? overrideCards
+          : breakType === "random-teams"
+            ? team
+              ? teamCards.get(team) || []
+              : []
+            : checklistDistribution.get(i) || [],
       buyer: assigned
         ? {
             display_name: assigned.display_name,
@@ -868,6 +917,49 @@ app.delete("/api/spotlists/:id", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete spot list." });
+  }
+});
+
+app.put("/api/spotlists/:id/distribution", async (req, res) => {
+  const { id } = req.params;
+  const { distribution } = req.body || {};
+  try {
+    const spotList = await get(
+      "SELECT id, total_spots FROM spot_lists WHERE id = ?;",
+      [id]
+    );
+    if (!spotList) return res.status(404).json({ error: "Spot list not found." });
+    if (!Array.isArray(distribution)) {
+      return res.status(400).json({ error: "Distribution must be an array." });
+    }
+    const normalized = [];
+    for (let i = 0; i < spotList.total_spots; i += 1) {
+      const entry = distribution[i];
+      normalized.push(normalizeChecklistItems(entry));
+    }
+    await run(
+      "UPDATE spot_lists SET custom_distribution_json = ? WHERE id = ?;",
+      [JSON.stringify(normalized), id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save distribution." });
+  }
+});
+
+app.delete("/api/spotlists/:id/distribution", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await run(
+      "UPDATE spot_lists SET custom_distribution_json = NULL WHERE id = ?;",
+      [id]
+    );
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "Spot list not found." });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to reset distribution." });
   }
 });
 
@@ -924,6 +1016,9 @@ app.post("/api/spotlists/:id/randomize", async (req, res) => {
     }
 
     await run("COMMIT;");
+    await run("UPDATE spot_lists SET custom_distribution_json = NULL WHERE id = ?;", [
+      spotList.id,
+    ]);
     const checklistItems = JSON.parse(spotList.checklist_json || "[]");
     const spots = await buildSpotAssignments(spotList, checklistItems);
     res.json({ ok: true, spots });
@@ -950,10 +1045,10 @@ app.post("/api/spotlists/:id/reshuffle", async (req, res) => {
     if (!spotList) return res.status(404).json({ error: "Not found." });
 
     const newSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    await run("UPDATE spot_lists SET checklist_seed = ? WHERE id = ?;", [
-      newSeed,
-      spotList.id,
-    ]);
+    await run(
+      "UPDATE spot_lists SET checklist_seed = ?, custom_distribution_json = NULL WHERE id = ?;",
+      [newSeed, spotList.id]
+    );
 
     const checklistItems = JSON.parse(spotList.checklist_json || "[]");
     const spots = await buildSpotAssignments(

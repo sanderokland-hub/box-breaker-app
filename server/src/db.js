@@ -78,6 +78,12 @@ db.serialize(() => {
     if (!hasAutoImportMatch) {
       db.run("ALTER TABLE spot_lists ADD COLUMN auto_import_match TEXT;");
     }
+    const hasCustomDistribution = rows.some(
+      (row) => row.name === "custom_distribution_json"
+    );
+    if (!hasCustomDistribution) {
+      db.run("ALTER TABLE spot_lists ADD COLUMN custom_distribution_json TEXT;");
+    }
   });
   db.run(
     `CREATE TABLE IF NOT EXISTS buyers (

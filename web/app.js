@@ -40,9 +40,32 @@ const fabCreate = document.getElementById("fab-create");
 const googleStatus = document.getElementById("google-status");
 const googleConnect = document.getElementById("google-connect");
 const googleRefresh = document.getElementById("google-refresh");
+const baselineEditorList = document.getElementById("baseline-checklist-editor");
+const baselineItemInput = document.getElementById("baseline-item-input");
+const baselineItemAdd = document.getElementById("baseline-item-add");
+const baselineSave = document.getElementById("baseline-save");
+const baselineReset = document.getElementById("baseline-reset");
+const baselineEditorStatus = document.getElementById("baseline-editor-status");
+const saveDistributionButton = document.getElementById("save-distribution");
+const resetDistributionButton = document.getElementById("reset-distribution");
+const spotEditorSelect = document.getElementById("spot-editor-select");
+const spotEditorList = document.getElementById("spot-editor-list");
+const spotEditorSave = document.getElementById("spot-editor-save");
+const spotEditorReset = document.getElementById("spot-editor-reset");
+const spotEditorStatus = document.getElementById("spot-editor-status");
 
 let cachedBreaks = [];
 let cachedTeamCount = 0;
+let baselineEditorItems = [];
+let baselineEditorBreakId = null;
+
+const moveArrayItem = (list, fromIndex, toIndex) => {
+  if (fromIndex === toIndex) return list;
+  const next = list.slice();
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+};
 
 const setActivePage = (pageId) => {
   pages.forEach((page) => {
@@ -120,17 +143,46 @@ const renderBaselineSelect = (breaks, query = "") => {
   fillSelect(baselineSelect, filtered, "Select a baseline");
 };
 
+const renderBaselineEditor = () => {
+  if (!baselineEditorList) return;
+  baselineEditorList.innerHTML = "";
+  if (!baselineEditorBreakId) {
+    baselineEditorList.innerHTML =
+      '<li class="muted">Select a baseline to edit.</li>';
+    return;
+  }
+  baselineEditorItems.forEach((item, index) => {
+    const li = document.createElement("li");
+    li.className = "checklist-item";
+    li.setAttribute("draggable", "true");
+    li.dataset.index = String(index);
+    li.innerHTML = `
+      <span>${item}</span>
+      <button class="delete-button" data-delete-index="${index}" type="button">
+        ×
+      </button>
+    `;
+    baselineEditorList.appendChild(li);
+  });
+};
+
 const renderBaselineDetails = (breaks, selectedId) => {
   baselineDetails.innerHTML = "";
   if (!selectedId) {
     baselineDetails.innerHTML =
       '<div class="muted">Select a baseline to view the checklist.</div>';
+    baselineEditorBreakId = null;
+    baselineEditorItems = [];
+    renderBaselineEditor();
     return;
   }
   const found = breaks.find((item) => String(item.id) === String(selectedId));
   if (!found) {
     baselineDetails.innerHTML =
       '<div class="muted">Baseline not found.</div>';
+    baselineEditorBreakId = null;
+    baselineEditorItems = [];
+    renderBaselineEditor();
     return;
   }
   const card = document.createElement("div");
@@ -139,12 +191,12 @@ const renderBaselineDetails = (breaks, selectedId) => {
   card.innerHTML = `
     <strong>${found.name}</strong>
     <div class="muted">${found.event_date || "No date set"}</div>
-    <div>Checklist (${checklistItems.length})</div>
-    <ul>
-      ${checklistItems.map((item) => `<li>${item}</li>`).join("")}
-    </ul>
+    <div>Checklist items: ${checklistItems.length}</div>
   `;
   baselineDetails.appendChild(card);
+  baselineEditorBreakId = found.id;
+  baselineEditorItems = checklistItems.slice();
+  renderBaselineEditor();
 };
 
 const renderSpotLists = (spotLists) => {
@@ -294,37 +346,192 @@ const renderDashboard = (breaks, spotLists, activity = {}) => {
   });
 };
 
-const renderAssignments = (spotList) => {
-  assignmentList.innerHTML = "";
-  if (!spotList) {
-    assignmentList.innerHTML = '<div class="muted">Pick a spot list.</div>';
-    return;
-  }
-  spotList.spots.forEach((spot) => {
-    const card = document.createElement("div");
-    card.className = "card";
-    const cards = Array.isArray(spot.cards) ? spot.cards : [];
-    card.innerHTML = `
-      <strong>Spot ${spot.index}</strong>
-      ${spot.team ? `<div>Team: ${spot.team}</div>` : ""}
-      <div>${spot.assigned ? "Assigned" : "Available"}</div>
-      ${
-        spot.assigned
-          ? `<div>${spot.buyer.display_name}</div>`
-          : ""
+const createDistributionEditor = ({
+  listEl,
+  statusEl,
+  saveButton,
+  resetButton,
+}) => {
+  let currentSpotList = null;
+  let distribution = [];
+  let dragInfo = null;
+
+  const render = () => {
+    listEl.innerHTML = "";
+    if (!currentSpotList) {
+      listEl.innerHTML = '<div class="muted">Pick a spot list.</div>';
+      return;
+    }
+    currentSpotList.spots.forEach((spot, spotIndex) => {
+      const card = document.createElement("div");
+      card.className = "card spot-editor-card";
+      const cards = distribution[spotIndex] || [];
+      const header = `
+        <div class="spot-editor-header">
+          <strong>Spot ${spot.index}</strong>
+          ${spot.team ? `<span class="badge">${spot.team}</span>` : ""}
+        </div>
+        <div class="muted">${spot.assigned ? "Assigned" : "Available"}</div>
+        ${spot.assigned && spot.buyer ? `<div>${spot.buyer.display_name}</div>` : ""}
+      `;
+      const list = document.createElement("ul");
+      list.className = "spot-cards";
+      list.dataset.spotIndex = String(spotIndex);
+      if (!cards.length) {
+        const empty = document.createElement("li");
+        empty.className = "muted";
+        empty.textContent = "No cards in this spot.";
+        list.appendChild(empty);
+      } else {
+        cards.forEach((cardItem, cardIndex) => {
+          const li = document.createElement("li");
+          li.className = "card-chip";
+          li.setAttribute("draggable", "true");
+          li.dataset.spotIndex = String(spotIndex);
+          li.dataset.cardIndex = String(cardIndex);
+          li.innerHTML = `
+            <span>${cardItem}</span>
+            <button class="delete-button" data-spot="${spotIndex}" data-card="${cardIndex}" type="button">
+              ×
+            </button>
+          `;
+          list.appendChild(li);
+        });
       }
-      ${
-        cards.length
-          ? `<div class="cards">
-               <div class="muted">Checklist cards (${cards.length})</div>
-               <ul>${cards.map((cardItem) => `<li>${cardItem}</li>`).join("")}</ul>
-             </div>`
-          : ""
-      }
-    `;
-    assignmentList.appendChild(card);
+      card.innerHTML = header;
+      card.appendChild(list);
+      listEl.appendChild(card);
+    });
+  };
+
+  const load = (spotList) => {
+    currentSpotList = spotList;
+    distribution = spotList
+      ? spotList.spots.map((spot) =>
+          Array.isArray(spot.cards) ? spot.cards.slice() : []
+        )
+      : [];
+    render();
+  };
+
+  const save = async () => {
+    if (!currentSpotList) {
+      statusEl.textContent = "Pick a spot list to save.";
+      return;
+    }
+    statusEl.textContent = "Saving distribution...";
+    try {
+      await fetchJSON(`/api/spotlists/${currentSpotList.id}/distribution`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ distribution }),
+      });
+      statusEl.textContent = "Distribution saved.";
+    } catch (error) {
+      statusEl.textContent = error.message;
+    }
+  };
+
+  const reset = async () => {
+    if (!currentSpotList) {
+      statusEl.textContent = "Pick a spot list to reset.";
+      return;
+    }
+    statusEl.textContent = "Resetting distribution...";
+    try {
+      await fetchJSON(`/api/spotlists/${currentSpotList.id}/distribution`, {
+        method: "DELETE",
+      });
+      statusEl.textContent = "Distribution reset.";
+      const refreshed = await fetchJSON(
+        `/api/spotlists/${currentSpotList.id}`
+      );
+      load(refreshed);
+    } catch (error) {
+      statusEl.textContent = error.message;
+    }
+  };
+
+  listEl.addEventListener("dragstart", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const card = target.closest(".card-chip");
+    if (!card) return;
+    dragInfo = {
+      spotIndex: Number(card.dataset.spotIndex),
+      cardIndex: Number(card.dataset.cardIndex),
+    };
+    event.dataTransfer.effectAllowed = "move";
   });
+
+  listEl.addEventListener("dragover", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const list = target.closest(".spot-cards");
+    if (!list) return;
+    event.preventDefault();
+    list.classList.add("drag-over");
+  });
+
+  listEl.addEventListener("dragleave", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const list = target.closest(".spot-cards");
+    if (!list) return;
+    list.classList.remove("drag-over");
+  });
+
+  listEl.addEventListener("drop", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const list = target.closest(".spot-cards");
+    if (!list || !dragInfo) return;
+    event.preventDefault();
+    list.classList.remove("drag-over");
+    const targetIndex = Number(list.dataset.spotIndex);
+    const sourceCards = distribution[dragInfo.spotIndex] || [];
+    const [moved] = sourceCards.splice(dragInfo.cardIndex, 1);
+    if (typeof moved === "string") {
+      const targetCards = distribution[targetIndex] || [];
+      targetCards.push(moved);
+      distribution[dragInfo.spotIndex] = sourceCards;
+      distribution[targetIndex] = targetCards;
+    }
+    dragInfo = null;
+    render();
+  });
+
+  listEl.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const deleteButton = target.closest("[data-spot][data-card]");
+    if (!deleteButton) return;
+    const spotIndex = Number(deleteButton.getAttribute("data-spot"));
+    const cardIndex = Number(deleteButton.getAttribute("data-card"));
+    const cards = distribution[spotIndex] || [];
+    cards.splice(cardIndex, 1);
+    distribution[spotIndex] = cards;
+    render();
+  });
+
+  if (saveButton) saveButton.addEventListener("click", save);
+  if (resetButton) resetButton.addEventListener("click", reset);
+
+  return { load };
 };
+
+const assignmentEditor = createDistributionEditor({
+  listEl: assignmentList,
+  statusEl: assignmentsStatus,
+  saveButton: saveDistributionButton,
+  resetButton: resetDistributionButton,
+});
+const spotEditor = createDistributionEditor({
+  listEl: spotEditorList,
+  statusEl: spotEditorStatus,
+  saveButton: spotEditorSave,
+  resetButton: spotEditorReset,
+});
 
 const fillSelect = (select, items, placeholder) => {
   select.innerHTML = "";
@@ -513,16 +720,28 @@ const loadData = async () => {
   renderBreakSelect();
   fillSelect(wooSpotListSelect, spotLists, "Select a spot list");
   fillSelect(assignmentsSelect, spotLists, "Select a spot list");
+  if (spotEditorSelect) {
+    fillSelect(spotEditorSelect, spotLists, "Select a spot list");
+  }
   updateBreakTypeState();
 };
 
 const loadAssignments = async () => {
   if (!assignmentsSelect.value) {
-    renderAssignments(null);
+    assignmentEditor.load(null);
     return;
   }
   const spotList = await fetchJSON(`/api/spotlists/${assignmentsSelect.value}`);
-  renderAssignments(spotList);
+  assignmentEditor.load(spotList);
+};
+
+const loadSpotEditor = async () => {
+  if (!spotEditorSelect || !spotEditorSelect.value) {
+    spotEditor.load(null);
+    return;
+  }
+  const spotList = await fetchJSON(`/api/spotlists/${spotEditorSelect.value}`);
+  spotEditor.load(spotList);
 };
 
 beckettForm.addEventListener("submit", async (event) => {
@@ -609,6 +828,107 @@ baselineSelect.addEventListener("change", async () => {
     baselineDetails.innerHTML = '<div class="muted">Failed to load.</div>';
   }
 });
+
+if (baselineItemAdd) {
+  baselineItemAdd.addEventListener("click", () => {
+    const value = (baselineItemInput.value || "").trim();
+    if (!value) return;
+    baselineEditorItems.push(value);
+    baselineItemInput.value = "";
+    renderBaselineEditor();
+  });
+}
+
+if (baselineEditorList) {
+  baselineEditorList.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const deleteIndex = target.getAttribute("data-delete-index");
+    if (deleteIndex === null) return;
+    baselineEditorItems.splice(Number(deleteIndex), 1);
+    renderBaselineEditor();
+  });
+
+  baselineEditorList.addEventListener("dragstart", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const item = target.closest(".checklist-item");
+    if (!item) return;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", item.dataset.index);
+  });
+
+  baselineEditorList.addEventListener("dragover", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const item = target.closest(".checklist-item");
+    if (!item) return;
+    event.preventDefault();
+    item.classList.add("drag-over");
+  });
+
+  baselineEditorList.addEventListener("dragleave", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const item = target.closest(".checklist-item");
+    if (!item) return;
+    item.classList.remove("drag-over");
+  });
+
+  baselineEditorList.addEventListener("drop", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const item = target.closest(".checklist-item");
+    if (!item) return;
+    event.preventDefault();
+    const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+    const toIndex = Number(item.dataset.index);
+    baselineEditorItems = moveArrayItem(baselineEditorItems, fromIndex, toIndex);
+    renderBaselineEditor();
+  });
+}
+
+if (baselineSave) {
+  baselineSave.addEventListener("click", async () => {
+    if (!baselineEditorBreakId) {
+      if (baselineEditorStatus) {
+        baselineEditorStatus.textContent = "Select a baseline first.";
+      }
+      return;
+    }
+    if (baselineEditorStatus) {
+      baselineEditorStatus.textContent = "Saving checklist...";
+    }
+    try {
+      await fetchJSON(`/api/breaks/${baselineEditorBreakId}/checklist`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checklistItems: baselineEditorItems }),
+      });
+      if (baselineEditorStatus) {
+        baselineEditorStatus.textContent = "Checklist saved.";
+      }
+      await loadData();
+    } catch (error) {
+      if (baselineEditorStatus) {
+        baselineEditorStatus.textContent = error.message;
+      }
+    }
+  });
+}
+
+if (baselineReset) {
+  baselineReset.addEventListener("click", () => {
+    const baseline = cachedBreaks.find(
+      (item) => String(item.id) === String(baselineEditorBreakId)
+    );
+    baselineEditorItems = baseline ? baseline.checklist_items.slice() : [];
+    if (baselineEditorStatus) {
+      baselineEditorStatus.textContent = "Checklist reset.";
+    }
+    renderBaselineEditor();
+  });
+}
 
 breakSelectSearch.addEventListener("input", () => {
   renderBreakSelect();
@@ -754,6 +1074,9 @@ wooImportForm.addEventListener("submit", async (event) => {
 });
 
 assignmentsSelect.addEventListener("change", loadAssignments);
+if (spotEditorSelect) {
+  spotEditorSelect.addEventListener("change", loadSpotEditor);
+}
 refreshAssignmentsButton.addEventListener("click", loadAssignments);
 randomizeSpotsButton.addEventListener("click", async () => {
   assignmentsStatus.textContent = "";
