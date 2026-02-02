@@ -11,7 +11,14 @@ const PORT = process.env.PORT || 3000;
 
 const webRoot = path.join(__dirname, "..", "..", "web");
 app.use(express.static(webRoot));
-app.use(express.json({ limit: "1mb" }));
+app.use(
+  express.json({
+    limit: "1mb",
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use((req, res, next) => {
   const startedAt = Date.now();
   res.on("finish", () => {
@@ -1264,98 +1271,92 @@ app.get("/api/activity", async (_req, res) => {
   }
 });
 
-app.post(
-  "/api/woo/webhook",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
-    const signature = req.get("x-wc-webhook-signature");
-    if (!hasWooWebhookSecret) {
-      return res.status(500).json({ error: "Webhook secret not configured." });
-    }
-    if (!verifyWooSignature(req.body, signature)) {
-      const { base64, hex } = hasWooWebhookSecret
-        ? computeWooSignature(req.body)
-        : { base64: "", hex: "" };
-      console.error("[woo-webhook] Signature mismatch", {
-        received: String(signature || "").slice(0, 16),
-        expectedBase64: base64.slice(0, 16),
-        expectedHex: hex.slice(0, 16),
-      });
-      return res.status(401).json({ error: "Invalid webhook signature." });
-    }
-    let payload;
-    try {
-      payload = JSON.parse(req.body.toString("utf-8"));
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid webhook payload." });
-    }
-    try {
-      const orderId = Number(payload.id || 0);
-      const lineItems = Array.isArray(payload.line_items)
-        ? payload.line_items
-        : [];
-      if (!orderId || !lineItems.length) {
-        return res.json({ imported: 0, skipped: 0, failed: [] });
-      }
-      const spotLists = await all(
-        "SELECT id, name, auto_import_match FROM spot_lists WHERE auto_import = 1;"
-      );
-      if (!spotLists.length) {
-        return res.json({ imported: 0, skipped: 0, failed: [] });
-      }
-      let imported = 0;
-      let skipped = 0;
-      const failed = [];
-      for (const item of lineItems) {
-        const itemName = String(item.name || "").toLowerCase();
-        const lineItemId = Number(item.id || 0);
-        const quantity = Number(item.quantity || 0);
-        if (!Number.isInteger(lineItemId)) {
-          skipped += 1;
-          continue;
-        }
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          skipped += 1;
-          continue;
-        }
-        const matches = spotLists.filter((list) => {
-          const matchText = String(
-            list.auto_import_match || list.name || ""
-          ).toLowerCase();
-          return matchText && itemName.includes(matchText);
-        });
-        if (!matches.length) {
-          skipped += 1;
-          continue;
-        }
-        const buyerName = extractBuyerName(payload);
-        for (const list of matches) {
-          try {
-            const result = await importWooLineItem({
-              spotListId: list.id,
-              orderId,
-              lineItemId,
-              quantity,
-              buyerName,
-            });
-            if (result.status === "imported") imported += 1;
-            else skipped += 1;
-          } catch (err) {
-            failed.push({
-              order_id: orderId,
-              item_name: item.name,
-              spot_list_id: list.id,
-              error: err.message || "Failed to import line item.",
-            });
-          }
-        }
-      }
-      res.json({ imported, skipped, failed });
-    } catch (err) {
-      res.status(500).json({ error: "Webhook import failed." });
-    }
+app.post("/api/woo/webhook", async (req, res) => {
+  const signature = req.get("x-wc-webhook-signature");
+  const rawBody =
+    req.rawBody ||
+    Buffer.from(JSON.stringify(req.body || {}), "utf-8");
+  if (!hasWooWebhookSecret) {
+    return res.status(500).json({ error: "Webhook secret not configured." });
   }
-);
+  if (!verifyWooSignature(rawBody, signature)) {
+    const { base64, hex } = hasWooWebhookSecret
+      ? computeWooSignature(rawBody)
+      : { base64: "", hex: "" };
+    console.error("[woo-webhook] Signature mismatch", {
+      received: String(signature || "").slice(0, 16),
+      expectedBase64: base64.slice(0, 16),
+      expectedHex: hex.slice(0, 16),
+    });
+    return res.status(401).json({ error: "Invalid webhook signature." });
+  }
+  const payload = req.body;
+  try {
+    const orderId = Number(payload.id || 0);
+    const lineItems = Array.isArray(payload.line_items)
+      ? payload.line_items
+      : [];
+    if (!orderId || !lineItems.length) {
+      return res.json({ imported: 0, skipped: 0, failed: [] });
+    }
+    const spotLists = await all(
+      "SELECT id, name, auto_import_match FROM spot_lists WHERE auto_import = 1;"
+    );
+    if (!spotLists.length) {
+      return res.json({ imported: 0, skipped: 0, failed: [] });
+    }
+    let imported = 0;
+    let skipped = 0;
+    const failed = [];
+    for (const item of lineItems) {
+      const itemName = String(item.name || "").toLowerCase();
+      const lineItemId = Number(item.id || 0);
+      const quantity = Number(item.quantity || 0);
+      if (!Number.isInteger(lineItemId)) {
+        skipped += 1;
+        continue;
+      }
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        skipped += 1;
+        continue;
+      }
+      const matches = spotLists.filter((list) => {
+        const matchText = String(
+          list.auto_import_match || list.name || ""
+        ).toLowerCase();
+        return matchText && itemName.includes(matchText);
+      });
+      if (!matches.length) {
+        skipped += 1;
+        continue;
+      }
+      const buyerName = extractBuyerName(payload);
+      for (const list of matches) {
+        try {
+          const result = await importWooLineItem({
+            spotListId: list.id,
+            orderId,
+            lineItemId,
+            quantity,
+            buyerName,
+          });
+          if (result.status === "imported") imported += 1;
+          else skipped += 1;
+        } catch (err) {
+          failed.push({
+            order_id: orderId,
+            item_name: item.name,
+            spot_list_id: list.id,
+            error: err.message || "Failed to import line item.",
+          });
+        }
+      }
+    }
+    res.json({ imported, skipped, failed });
+  } catch (err) {
+    res.status(500).json({ error: "Webhook import failed." });
+  }
+});
 
 app.get("/api/google/callback", async (req, res) => {
   const code = req.query.code;
