@@ -19,6 +19,17 @@ app.use(
     },
   })
 );
+app.use(
+  express.urlencoded({
+    extended: false,
+    limit: "1mb",
+    verify: (req, _res, buf) => {
+      if (!req.rawBody) {
+        req.rawBody = buf;
+      }
+    },
+  })
+);
 app.use((req, res, next) => {
   const startedAt = Date.now();
   res.on("finish", () => {
@@ -1272,11 +1283,14 @@ app.get("/api/activity", async (_req, res) => {
 });
 
 app.post("/api/woo/webhook", async (req, res) => {
-  const signature =
+  const headerSignature =
     req.get("x-wc-webhook-signature") ||
     req.get("x_wc_webhook_signature") ||
     req.headers["x-wc-webhook-signature"] ||
     req.headers["x_wc_webhook_signature"];
+  const bodySignature =
+    (req.body && (req.body.signature || req.body.webhook_signature)) || "";
+  const signature = headerSignature || bodySignature;
   const rawBody =
     req.rawBody ||
     Buffer.from(JSON.stringify(req.body || {}), "utf-8");
@@ -1287,6 +1301,10 @@ app.post("/api/woo/webhook", async (req, res) => {
     console.error("[woo-webhook] Missing signature header", {
       headerKeys: Object.keys(req.headers || {}),
       contentType: req.get("content-type") || "",
+      formKeys:
+        req.body && typeof req.body === "object"
+          ? Object.keys(req.body)
+          : [],
     });
   }
   if (!verifyWooSignature(rawBody, signature)) {
@@ -1300,7 +1318,18 @@ app.post("/api/woo/webhook", async (req, res) => {
     });
     return res.status(401).json({ error: "Invalid webhook signature." });
   }
-  const payload = req.body;
+  let payload = req.body;
+  if (
+    payload &&
+    typeof payload === "object" &&
+    typeof payload.payload === "string"
+  ) {
+    try {
+      payload = JSON.parse(payload.payload);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid webhook payload." });
+    }
+  }
   try {
     const orderId = Number(payload.id || 0);
     const lineItems = Array.isArray(payload.line_items)
