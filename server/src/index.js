@@ -1619,23 +1619,37 @@ app.post("/api/sheets/export", async (req, res) => {
       breakLabel
     );
     const isTeamBreak = spotList.break_type === "random-teams";
-    const rows = isTeamBreak
-      ? [
-          ["Spot", "Buyer", "Team"],
-          ...spots.map((spot) => [
-            spot.index,
-            spot.buyer?.display_name || "",
-            spot.team || "",
-          ]),
-        ]
-      : [
-          ["Spot", "Buyer", "Cards"],
-          ...spots.map((spot) => [
-            spot.index,
-            spot.buyer?.display_name || "",
-            Array.isArray(spot.cards) ? spot.cards.join(" | ") : "",
-          ]),
-        ];
+    let rows;
+    if (isTeamBreak) {
+      rows = [
+        ["Spot", "Buyer", "Team"],
+        ...spots.map((spot) => [
+          spot.index,
+          spot.buyer?.display_name || "",
+          spot.team || "",
+        ]),
+      ];
+    } else {
+      const maxCards = spots.reduce((max, spot) => {
+        const count = Array.isArray(spot.cards) ? spot.cards.length : 0;
+        return Math.max(max, count);
+      }, 0);
+      const header = ["Spot", "Buyer"];
+      for (let i = 1; i <= maxCards; i += 1) {
+        header.push(`Card ${i}`);
+      }
+      rows = [
+        header,
+        ...spots.map((spot) => {
+          const cards = Array.isArray(spot.cards) ? spot.cards : [];
+          const row = [spot.index, spot.buyer?.display_name || ""];
+          for (let i = 0; i < maxCards; i += 1) {
+            row.push(cards[i] || "");
+          }
+          return row;
+        }),
+      ];
+    }
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
