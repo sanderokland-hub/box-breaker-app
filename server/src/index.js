@@ -1306,6 +1306,14 @@ app.post("/api/woo/webhook", async (req, res) => {
           ? Object.keys(req.body)
           : [],
     });
+    if (
+      req.body &&
+      typeof req.body === "object" &&
+      Object.keys(req.body).length === 1 &&
+      "webhook_id" in req.body
+    ) {
+      return res.json({ ok: true, message: "Webhook test received." });
+    }
   }
   if (!verifyWooSignature(rawBody, signature)) {
     const { base64, hex } = hasWooWebhookSecret
