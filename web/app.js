@@ -58,6 +58,7 @@ let cachedBreaks = [];
 let cachedTeamCount = 0;
 let baselineEditorItems = [];
 let baselineEditorBreakId = null;
+let cachedAssignments = null;
 
 const moveArrayItem = (list, fromIndex, toIndex) => {
   if (fromIndex === toIndex) return list;
@@ -65,6 +66,25 @@ const moveArrayItem = (list, fromIndex, toIndex) => {
   const [moved] = next.splice(fromIndex, 1);
   next.splice(toIndex, 0, moved);
   return next;
+};
+
+const animateShuffle = (container, duration = 1400) => {
+  if (!container) return Promise.resolve();
+  const cards = Array.from(container.children);
+  if (cards.length <= 1) return Promise.resolve();
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (Date.now() - start >= duration) {
+        resolve();
+        return;
+      }
+      const shuffled = cards.slice().sort(() => Math.random() - 0.5);
+      shuffled.forEach((card) => container.appendChild(card));
+      setTimeout(tick, 120);
+    };
+    tick();
+  });
 };
 
 const setActivePage = (pageId) => {
@@ -279,7 +299,7 @@ const renderDashboard = (breaks, spotLists, activity = {}) => {
           </div>
           <div class="queue-actions">
             <button class="secondary" data-queue-open="${list.id}" type="button">
-              Open assignments
+              Create break
             </button>
           </div>
         `;
@@ -725,7 +745,7 @@ const loadData = async () => {
   renderSpotLists(spotLists);
   renderBreakSelect();
   fillSelect(wooSpotListSelect, spotLists, "Select a spot list");
-  fillSelect(assignmentsSelect, spotLists, "Select a spot list");
+  fillSelect(assignmentsSelect, spotLists, "Select a break");
   if (spotEditorSelect) {
     fillSelect(spotEditorSelect, spotLists, "Select a spot list");
   }
@@ -734,11 +754,15 @@ const loadData = async () => {
 
 const loadAssignments = async () => {
   if (!assignmentsSelect.value) {
+    cachedAssignments = null;
     assignmentEditor.load(null);
     return;
   }
   const spotList = await fetchJSON(`/api/spotlists/${assignmentsSelect.value}`);
+  cachedAssignments = spotList;
   assignmentEditor.load(spotList);
+  const assignedCount = spotList.spots.filter((spot) => spot.assigned).length;
+  assignmentsStatus.textContent = `Assigned ${assignedCount} of ${spotList.total_spots} spots.`;
 };
 
 const loadSpotEditor = async () => {
@@ -1091,16 +1115,26 @@ refreshAssignmentsButton.addEventListener("click", loadAssignments);
 randomizeSpotsButton.addEventListener("click", async () => {
   assignmentsStatus.textContent = "";
   if (!assignmentsSelect.value) {
-    assignmentsStatus.textContent = "Select a spot list to randomize.";
+    assignmentsStatus.textContent = "Select a break to create.";
     return;
   }
-  assignmentsStatus.textContent = "Randomizing spots...";
+  assignmentsStatus.textContent = "Creating break... Randomizing spots.";
   try {
-    await fetchJSON(`/api/spotlists/${assignmentsSelect.value}/randomize`, {
-      method: "POST",
-    });
-    assignmentsStatus.textContent = "Spots randomized.";
-    await loadAssignments();
+    const animation = animateShuffle(assignmentList);
+    const result = await fetchJSON(
+      `/api/spotlists/${assignmentsSelect.value}/randomize`,
+      {
+        method: "POST",
+      }
+    );
+    await animation;
+    if (cachedAssignments) {
+      cachedAssignments = { ...cachedAssignments, spots: result.spots || [] };
+      assignmentEditor.load(cachedAssignments);
+    } else {
+      await loadAssignments();
+    }
+    assignmentsStatus.textContent = "Break created. Spots randomized.";
   } catch (error) {
     assignmentsStatus.textContent = error.message;
   }
@@ -1109,7 +1143,7 @@ randomizeSpotsButton.addEventListener("click", async () => {
 reshuffleCardsButton.addEventListener("click", async () => {
   assignmentsStatus.textContent = "";
   if (!assignmentsSelect.value) {
-    assignmentsStatus.textContent = "Select a spot list to reshuffle.";
+    assignmentsStatus.textContent = "Select a break to reshuffle.";
     return;
   }
   assignmentsStatus.textContent = "Reshuffling checklist cards...";
@@ -1127,7 +1161,7 @@ reshuffleCardsButton.addEventListener("click", async () => {
 exportSheetsButton.addEventListener("click", async () => {
   assignmentsStatus.textContent = "";
   if (!assignmentsSelect.value) {
-    assignmentsStatus.textContent = "Select a spot list to export.";
+    assignmentsStatus.textContent = "Select a break to export.";
     return;
   }
   assignmentsStatus.textContent = "Creating Google Sheet...";

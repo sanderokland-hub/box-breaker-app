@@ -75,6 +75,19 @@ const parseChecklist = (row) => ({
 const validateRequired = (value) =>
   typeof value === "string" && value.trim().length > 0;
 
+const maskBuyerName = (value) => {
+  const parts = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return "";
+  if (parts.length === 1) return parts[0];
+  const first = parts[0];
+  const second = parts[1];
+  const initial = second ? String(second).charAt(0).toUpperCase() : "";
+  return initial ? `${first} ${initial}` : first;
+};
+
 const normalizeChecklistItems = (items) =>
   Array.isArray(items)
     ? items
@@ -926,7 +939,7 @@ const buildSpotAssignments = async (spotList, checklistItems = []) => {
             : checklistDistribution.get(i) || [],
       buyer: assigned
         ? {
-            display_name: assigned.display_name,
+            display_name: maskBuyerName(assigned.display_name),
           }
         : null,
     });
@@ -1418,7 +1431,12 @@ app.get("/api/activity", async (_req, res) => {
        ORDER BY purchases.created_at DESC
        LIMIT 20;`
     );
-    res.json({ purchases });
+    res.json({
+      purchases: purchases.map((row) => ({
+        ...row,
+        display_name: maskBuyerName(row.display_name),
+      })),
+    });
   } catch (err) {
     res.status(500).json({ error: "Failed to load activity." });
   }
