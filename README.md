@@ -5,11 +5,14 @@ Simple web app for managing breaks, spot lists, and buyer intake.
 ## Setup
 
 1. Install dependencies:
-   - `cd box-breaker-app/server`
+   - `cd server`
    - `npm install`
-2. Start server:
+2. Optional: configure environment variables:
+   - `cp .env.example .env`
+   - Fill in any integration values you need (WooCommerce/Google).
+3. Start server:
    - `npm start`
-3. Open `http://localhost:3000`
+4. Open `http://localhost:3000`
 
 ## Deployment
 
