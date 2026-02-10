@@ -1353,6 +1353,10 @@ app.post("/api/woo/import", async (req, res) => {
     const failed = [];
 
     for (const order of orders) {
+      // Skip cancelled orders (additional safety check)
+      if (String(order.status || "").toLowerCase() === "kansellert") {
+        continue;
+      }
       const lineItems = Array.isArray(order.line_items) ? order.line_items : [];
       for (const item of lineItems) {
         const itemName = String(item.name || "").toLowerCase();
