@@ -1345,6 +1345,9 @@ app.post("/api/woo/import", async (req, res) => {
         pageLimit: 5,
       });
     }
+    orders = orders.filter(
+      (o) => String(o.status || "").toLowerCase() !== "kansellert"
+    );
     let imported = 0;
     let skipped = 0;
     const failed = [];
@@ -1499,6 +1502,9 @@ app.post("/api/woo/webhook", async (req, res) => {
     }
   }
   try {
+    if (String(payload.status || "").toLowerCase() === "kansellert") {
+      return res.json({ imported: 0, skipped: 0, failed: [] });
+    }
     const orderId = Number(payload.id || 0);
     const lineItems = Array.isArray(payload.line_items)
       ? payload.line_items
