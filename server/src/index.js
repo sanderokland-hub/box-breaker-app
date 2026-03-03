@@ -10,7 +10,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const webRoot = path.join(__dirname, "..", "..", "web");
-app.use(express.static(webRoot));
+app.use(
+  express.static(webRoot, {
+    setHeaders: (res, filePath) => {
+      if (filePath && (filePath.endsWith(".html") || path.basename(filePath) === "index.html")) {
+        res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+      }
+    },
+  })
+);
 app.use(
   express.json({
     limit: "1mb",
