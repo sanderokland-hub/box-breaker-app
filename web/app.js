@@ -19,6 +19,9 @@ const randomizeSpotsButton = document.getElementById("randomize-spots");
 const reshuffleCardsButton = document.getElementById("reshuffle-cards");
 const exportSheetsButton = document.getElementById("export-sheets");
 const assignmentsStatus = document.getElementById("assignments-status");
+const addBuyerForm = document.getElementById("add-buyer-form");
+const addBuyerNameInput = document.getElementById("add-buyer-name");
+const addBuyerSpotsInput = document.getElementById("add-buyer-spots");
 const breakSelectSearch = document.getElementById("break-select-search");
 const breakTypeSelect = document.getElementById("break-type");
 const totalSpotsInput = document.querySelector(
@@ -1112,6 +1115,41 @@ if (spotEditorSelect) {
   spotEditorSelect.addEventListener("change", loadSpotEditor);
 }
 refreshAssignmentsButton.addEventListener("click", loadAssignments);
+
+if (addBuyerForm) {
+  addBuyerForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!assignmentsSelect.value) {
+      assignmentsStatus.textContent = "Select a break first.";
+      return;
+    }
+    const name = (addBuyerNameInput?.value || "").trim();
+    if (!name) {
+      assignmentsStatus.textContent = "Enter a buyer name.";
+      return;
+    }
+    const spotCount = Math.max(1, parseInt(addBuyerSpotsInput?.value || "1", 10) || 1);
+    assignmentsStatus.textContent = "Adding buyer...";
+    try {
+      await fetchJSON("/api/purchases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spotListId: assignmentsSelect.value,
+          spotCount,
+          buyer: { displayName: name },
+        }),
+      });
+      assignmentsStatus.textContent = `Added ${name} to ${spotCount} spot(s).`;
+      addBuyerNameInput.value = "";
+      if (addBuyerSpotsInput) addBuyerSpotsInput.value = "1";
+      await loadAssignments();
+    } catch (error) {
+      assignmentsStatus.textContent = error.message;
+    }
+  });
+}
+
 randomizeSpotsButton.addEventListener("click", async () => {
   assignmentsStatus.textContent = "";
   if (!assignmentsSelect.value) {

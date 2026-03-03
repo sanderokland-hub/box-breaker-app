@@ -1,0 +1,10 @@
+# Copy this file to deploy-config.ps1 and fill in your Hostinger VPS details.
+# deploy-config.ps1 is gitignored so your server info stays local.
+
+$DeployUser = "root"                    # SSH user (e.g. root or ubuntu)
+$DeployHost = "YOUR_VPS_IP_OR_HOSTNAME"  # From Hostinger: VPS IP or hostname
+$DeployPath = "/home/username/box-breaker-app"  # Full path to project on VPS (where you cloned the repo)
+
+# How to restart the app on the VPS (optional; default is pm2)
+# $DeployRestartCommand = "pm2 restart box-breaker"
+# $DeployRestartCommand = "sudo systemctl restart box-breaker"

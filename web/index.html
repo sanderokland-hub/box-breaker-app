@@ -248,6 +248,26 @@
               </button>
             </div>
           </div>
+          <div class="add-buyer-manual">
+            <strong>Add buyer manually</strong>
+            <span class="muted">Fill empty spots with a name</span>
+            <form id="add-buyer-form" class="inline-form">
+              <input
+                id="add-buyer-name"
+                type="text"
+                placeholder="Buyer name"
+                required
+              />
+              <input
+                id="add-buyer-spots"
+                type="number"
+                min="1"
+                value="1"
+                title="Number of spots"
+              />
+              <button type="submit">Add buyer</button>
+            </form>
+          </div>
           <div id="assignments-status" class="status muted"></div>
           <div id="assignment-list" class="list"></div>
         </section>

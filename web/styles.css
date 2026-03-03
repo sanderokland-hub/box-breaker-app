@@ -201,6 +201,29 @@ button.danger:hover {
   flex-wrap: wrap;
 }
 
+.add-buyer-manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+
+.add-buyer-manual strong {
+  margin-right: 8px;
+}
+
+.add-buyer-manual .inline-form {
+  align-items: center;
+}
+
+.add-buyer-manual #add-buyer-spots {
+  width: 4rem;
+}
+
 .stats-grid {
   display: grid;
   gap: 10px;
