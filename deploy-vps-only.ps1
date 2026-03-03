@@ -16,7 +16,7 @@ if (-not $DeployUser -or -not $DeployHost -or -not $DeployPath) {
     exit 1
 }
 
-$restartCmd = if ($DeployRestartCommand) { $DeployRestartCommand } else { "pm2 restart box-breaker" }
+$restartCmd = if ($DeployRestartCommand) { $DeployRestartCommand } else { "pm2 restart boxbreakerpro" }
 $remoteCmd = "cd $DeployPath && git pull origin main && cd server && npm install --production && $restartCmd"
 Write-Host "Updating VPS at ${DeployUser}@${DeployHost}..." -ForegroundColor Cyan
 ssh "${DeployUser}@${DeployHost}" $remoteCmd

@@ -41,7 +41,7 @@ if ($status) {
 }
 
 # 2. SSH to VPS: pull and restart
-$restartCmd = if ($DeployRestartCommand) { $DeployRestartCommand } else { "pm2 restart box-breaker" }
+$restartCmd = if ($DeployRestartCommand) { $DeployRestartCommand } else { "pm2 restart boxbreakerpro" }
 $remoteCmd = "cd $DeployPath && git pull origin main && cd server && npm install --production && $restartCmd"
 Write-Host "Updating VPS at ${DeployUser}@${DeployHost}..." -ForegroundColor Cyan
 ssh "${DeployUser}@${DeployHost}" $remoteCmd

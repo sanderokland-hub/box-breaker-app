@@ -5,6 +5,6 @@ $DeployUser = "root"                    # SSH user (e.g. root or ubuntu)
 $DeployHost = "YOUR_VPS_IP_OR_HOSTNAME"  # From Hostinger: VPS IP or hostname
 $DeployPath = "/home/username/box-breaker-app"  # Full path to project on VPS (where you cloned the repo)
 
-# How to restart the app on the VPS (optional; default is pm2)
-# $DeployRestartCommand = "pm2 restart box-breaker"
-# $DeployRestartCommand = "sudo systemctl restart box-breaker"
+# How to restart the app on the VPS (optional; default: pm2 restart boxbreakerpro)
+# $DeployRestartCommand = "pm2 restart boxbreakerpro"
+# If your pm2 process has another name, use it: "pm2 restart your-process-name"
