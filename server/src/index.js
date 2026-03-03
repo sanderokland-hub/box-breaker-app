@@ -252,6 +252,13 @@ const fetchWooOrders = async ({
   return results;
 };
 
+const CANCELLED_STATUSES = ["kansellert", "cancelled"];
+
+const isOrderCancelled = (order) => {
+  const status = String(order.status || "").toLowerCase().trim();
+  return CANCELLED_STATUSES.includes(status);
+};
+
 const extractBuyerName = (order) => {
   const billing = order.billing || {};
   const name = `${billing.first_name || ""} ${billing.last_name || ""}`.trim();
@@ -1353,9 +1360,7 @@ app.post("/api/woo/import", async (req, res) => {
         pageLimit: 5,
       });
     }
-    orders = orders.filter(
-      (o) => String(o.status || "").toLowerCase() !== "kansellert"
-    );
+    orders = orders.filter((o) => !isOrderCancelled(o));
     let imported = 0;
     let skipped = 0;
     const failed = [];
@@ -1510,7 +1515,7 @@ app.post("/api/woo/webhook", async (req, res) => {
     }
   }
   try {
-    if (String(payload.status || "").toLowerCase() === "kansellert") {
+    if (isOrderCancelled(payload)) {
       return res.json({ imported: 0, skipped: 0, failed: [] });
     }
     const orderId = Number(payload.id || 0);
